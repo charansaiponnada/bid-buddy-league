@@ -8,9 +8,10 @@ type Participant = Tables<"participants">;
 interface BidHistoryProps {
   bids: Bid[];
   participants: Participant[];
+  teamDisplayName?: (teamCode: string) => string;
 }
 
-const BidHistory = ({ bids, participants }: BidHistoryProps) => {
+const BidHistory = ({ bids, participants, teamDisplayName }: BidHistoryProps) => {
   if (bids.length === 0) return null;
 
   const getBidderName = (bidderId: string) => {
@@ -42,7 +43,9 @@ const BidHistory = ({ bids, participants }: BidHistoryProps) => {
                     {team.code}
                   </span>
                 )}
-                <span className="font-medium">{getBidderName(bid.bidder_id)}</span>
+                <span className="font-medium">
+                  {teamDisplayName ? teamDisplayName(bid.team) : getBidderName(bid.bidder_id)}
+                </span>
               </div>
               <span className={`font-semibold ${index === 0 ? "text-secondary" : ""}`}>
                 {formatPrice(bid.amount)}

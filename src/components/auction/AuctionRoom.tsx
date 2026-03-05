@@ -4,6 +4,7 @@ import { getUserId, formatPrice } from "@/lib/auction";
 import { getBidIncrement, getTeamSquadInfo, validateBid, getAcceleratedBasePrice, MAX_SQUAD_SIZE, MAX_OVERSEAS, type TeamSquadInfo } from "@/lib/auctionRules";
 import { getTeam } from "@/lib/teams";
 import { toast } from "sonner";
+import { motion, AnimatePresence } from "framer-motion";
 import PlayerCard from "./PlayerCard";
 import BidControls from "./BidControls";
 import AuctionTimer from "./AuctionTimer";
@@ -11,6 +12,8 @@ import BidHistory from "./BidHistory";
 import ChatPanel from "./ChatPanel";
 import AuctionHeader from "./AuctionHeader";
 import TeamPurseBar from "./TeamPurseBar";
+import SoldOverlay from "./SoldOverlay";
+import AuctionStats from "./AuctionStats";
 import type { Tables } from "@/integrations/supabase/types";
 
 type Room = Tables<"rooms">;
@@ -36,6 +39,10 @@ const AuctionRoom = ({ room, participant: initialParticipant }: AuctionRoomProps
   const [players, setPlayers] = useState<Player[]>([]);
   const [showChat, setShowChat] = useState(false);
   const [acceleratedRound, setAcceleratedRound] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
+  const [pausedTimeLeft, setPausedTimeLeft] = useState<number | null>(null);
+  const [timerDuration, setTimerDuration] = useState(30);
+  const [soldAnimation, setSoldAnimation] = useState<{ playerName: string; teamCode: string; price: number } | null>(null);
 
   const loadAll = useCallback(async () => {
     // Load auction state
@@ -240,8 +247,9 @@ const AuctionRoom = ({ room, participant: initialParticipant }: AuctionRoomProps
       return;
     }
 
-    const nextPlayer = upcoming[0];
-    const timerEnd = new Date(Date.now() + 30_000).toISOString();
+    // Pick a random player from upcoming
+    const nextPlayer = upcoming[Math.floor(Math.random() * upcoming.length)];
+    const timerEnd = new Date(Date.now() + timerDuration * 1000).toISOString();
 
     await supabase
       .from("auction_state")
@@ -335,6 +343,14 @@ const AuctionRoom = ({ room, participant: initialParticipant }: AuctionRoomProps
     });
 
     toast.success(`${currentPlayer.name} sold to ${teamInfo?.shortName || soldTeam}!`);
+
+    // Trigger sold animation
+    setSoldAnimation({
+      playerName: currentPlayer.name,
+      teamCode: soldTeam,
+      price: soldPrice,
+    });
+    setTimeout(() => setSoldAnimation(null), 3500);
   };
 
   const markUnsold = async () => {
@@ -388,7 +404,7 @@ const AuctionRoom = ({ room, participant: initialParticipant }: AuctionRoomProps
       return;
     }
 
-    const timerEnd = new Date(Date.now() + 15_000).toISOString();
+    const timerEnd = new Date(Date.now() + timerDuration * 1000).toISOString();
 
     // Insert bid
     await supabase.from("bids").insert({
@@ -432,6 +448,82 @@ const AuctionRoom = ({ room, participant: initialParticipant }: AuctionRoomProps
     }
   };
 
+  // ── Host: Pause / Resume / End / Timer controls ──
+
+  const pauseAuction = async () => {
+    if (!auctionState?.timer_ends_at) return;
+    const remaining = Math.max(0, Math.ceil((new Date(auctionState.timer_ends_at).getTime() - Date.now()) / 1000));
+    setPausedTimeLeft(remaining);
+    setIsPaused(true);
+
+    // Set timer far in the future to freeze it
+    await supabase
+      .from("auction_state")
+      .update({ timer_ends_at: new Date(Date.now() + 999_999_000).toISOString() })
+      .eq("room_id", room.id);
+
+    await supabase.from("chat_messages").insert({
+      room_id: room.id,
+      sender: "System",
+      type: "system",
+      message: `⏸️ Auction PAUSED by host (${remaining}s remaining)`,
+    });
+    toast.info("Auction paused");
+  };
+
+  const resumeAuction = async () => {
+    if (pausedTimeLeft === null) return;
+    const newEnd = new Date(Date.now() + pausedTimeLeft * 1000).toISOString();
+    setIsPaused(false);
+    setPausedTimeLeft(null);
+
+    await supabase
+      .from("auction_state")
+      .update({ timer_ends_at: newEnd })
+      .eq("room_id", room.id);
+
+    await supabase.from("chat_messages").insert({
+      room_id: room.id,
+      sender: "System",
+      type: "system",
+      message: `▶️ Auction RESUMED by host`,
+    });
+    toast.info("Auction resumed");
+  };
+
+  const endAuction = async () => {
+    // Mark all upcoming/in_auction players as unsold
+    await supabase
+      .from("players")
+      .update({ status: "unsold" })
+      .eq("room_id", room.id)
+      .in("status", ["upcoming", "in_auction"]);
+
+    await supabase
+      .from("auction_state")
+      .update({ status: "completed", current_player_id: null, current_bid: 0, timer_ends_at: null })
+      .eq("room_id", room.id);
+
+    await supabase
+      .from("rooms")
+      .update({ status: "completed" })
+      .eq("id", room.id);
+
+    await supabase.from("chat_messages").insert({
+      room_id: room.id,
+      sender: "System",
+      type: "system",
+      message: `🏁 Auction ENDED by host!`,
+    });
+
+    toast.success("Auction ended!");
+  };
+
+  const changeTimer = (newDuration: number) => {
+    setTimerDuration(newDuration);
+    toast.success(`Timer set to ${newDuration}s for next player`);
+  };
+
   const unsoldPlayers = players.filter((p) => p.status === "unsold");
   const upcomingPlayers = players.filter((p) => p.status === "upcoming");
   const isAuctionComplete = auctionState?.status === "completed";
@@ -454,12 +546,40 @@ const AuctionRoom = ({ room, participant: initialParticipant }: AuctionRoomProps
 
   const canBid = isBidding && bidValidation.canBid;
 
+  // ── Auction stats ──
+  const auctionStatsData = useMemo(() => {
+    const highestSold = soldPlayers.reduce<{ name: string; price: number; team: string } | null>(
+      (max, p) => (!max || (p.sold_price || 0) > max.price ? { name: p.name, price: p.sold_price || 0, team: p.sold_to_team || "" } : max),
+      null
+    );
+    const totalSpent = soldPlayers.reduce((sum, p) => sum + (p.sold_price || 0), 0);
+    const avgPrice = soldPlayers.length > 0 ? totalSpent / soldPlayers.length : 0;
+    // Most expensive team
+    const teamSpend: Record<string, number> = {};
+    soldPlayers.forEach((p) => {
+      if (p.sold_to_team) {
+        teamSpend[p.sold_to_team] = (teamSpend[p.sold_to_team] || 0) + (p.sold_price || 0);
+      }
+    });
+    const topSpendingTeam = Object.entries(teamSpend).sort((a, b) => b[1] - a[1])[0] || null;
+
+    return { highestSold, totalSpent, avgPrice, topSpendingTeam };
+  }, [soldPlayers]);
+
+  // ── Helper: team_name(user_name) ──
+  const teamDisplayName = useCallback((teamCode: string) => {
+    const team = getTeam(teamCode);
+    const owner = participants.find((p) => p.team === teamCode);
+    const shortName = team?.shortName || teamCode;
+    return owner ? `${shortName}(${owner.display_name})` : shortName;
+  }, [participants]);
+
   return (
     <div className="min-h-screen bg-background">
       <AuctionHeader
         room={room}
         isHost={isHost}
-        auctionStatus={auctionState?.status || "idle"}
+        auctionStatus={isPaused ? "paused" : (auctionState?.status || "idle")}
         soldCount={soldPlayers.length}
         unsoldCount={unsoldPlayers.length}
         upcomingCount={upcomingPlayers.length}
@@ -470,7 +590,63 @@ const AuctionRoom = ({ room, participant: initialParticipant }: AuctionRoomProps
 
       <div className="max-w-7xl mx-auto p-4">
         {/* Team Purse Bar */}
-        <TeamPurseBar participants={participants} maxPurse={room.purse_per_team} />
+        <TeamPurseBar participants={participants} maxPurse={room.purse_per_team} teamDisplayName={teamDisplayName} />
+
+        {/* Sold Animation Overlay */}
+        <AnimatePresence>
+          {soldAnimation && (
+            <SoldOverlay
+              playerName={soldAnimation.playerName}
+              teamCode={soldAnimation.teamCode}
+              price={soldAnimation.price}
+              teamDisplayName={teamDisplayName}
+            />
+          )}
+        </AnimatePresence>
+
+        {/* Host Controls Bar */}
+        {isHost && isBidding && (
+          <div className="mt-3 flex flex-wrap items-center gap-2 bg-card rounded-xl border p-3">
+            <span className="text-sm font-semibold text-muted-foreground mr-2">Host:</span>
+            {!isPaused ? (
+              <button
+                onClick={pauseAuction}
+                className="px-3 py-1.5 rounded-lg text-sm font-medium bg-yellow-500/10 text-yellow-600 hover:bg-yellow-500/20 border border-yellow-500/30 transition-colors"
+              >
+                ⏸️ Pause
+              </button>
+            ) : (
+              <button
+                onClick={resumeAuction}
+                className="px-3 py-1.5 rounded-lg text-sm font-medium bg-green-500/10 text-green-600 hover:bg-green-500/20 border border-green-500/30 transition-colors"
+              >
+                ▶️ Resume ({pausedTimeLeft}s left)
+              </button>
+            )}
+            <button
+              onClick={endAuction}
+              className="px-3 py-1.5 rounded-lg text-sm font-medium bg-red-500/10 text-red-600 hover:bg-red-500/20 border border-red-500/30 transition-colors"
+            >
+              🏁 End Auction
+            </button>
+            <div className="flex items-center gap-1 ml-auto">
+              <span className="text-xs text-muted-foreground">Timer:</span>
+              {[15, 20, 30, 45].map((d) => (
+                <button
+                  key={d}
+                  onClick={() => changeTimer(d)}
+                  className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
+                    timerDuration === d
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-muted text-muted-foreground hover:bg-muted/80"
+                  }`}
+                >
+                  {d}s
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {isAuctionComplete ? (
           <div className="text-center py-16">
@@ -491,11 +667,12 @@ const AuctionRoom = ({ room, participant: initialParticipant }: AuctionRoomProps
                     player={currentPlayer}
                     currentBid={auctionState?.current_bid || 0}
                     currentBidderTeam={auctionState?.current_bidder_team || null}
+                    teamDisplayName={teamDisplayName}
                   />
                   <AuctionTimer
                     timerEndsAt={auctionState?.timer_ends_at || null}
                     onTimerEnd={handleTimerEnd}
-                    isBidding={isBidding}
+                    isBidding={isBidding && !isPaused}
                   />
                   <BidControls
                     currentBid={auctionState?.current_bid || 0}
@@ -561,7 +738,7 @@ const AuctionRoom = ({ room, participant: initialParticipant }: AuctionRoomProps
               )}
 
               {/* Bid History */}
-              <BidHistory bids={bids} participants={participants} />
+              <BidHistory bids={bids} participants={participants} teamDisplayName={teamDisplayName} />
             </div>
 
             {/* Sidebar */}
@@ -589,7 +766,7 @@ const AuctionRoom = ({ room, participant: initialParticipant }: AuctionRoomProps
                             >
                               {team.code}
                             </span>
-                            <span className="font-medium">{team.shortName}</span>
+                            <span className="font-medium">{teamDisplayName(info.teamCode)}</span>
                           </div>
                           <div className="flex items-center gap-3 text-xs">
                             <span className={squadWarning ? "text-orange-500 font-semibold" : "text-muted-foreground"}>
@@ -610,6 +787,17 @@ const AuctionRoom = ({ room, participant: initialParticipant }: AuctionRoomProps
                     <div>Max squad: {MAX_SQUAD_SIZE} • Max overseas: {MAX_OVERSEAS}</div>
                   </div>
                 </div>
+              )}
+
+              {/* Auction Stats */}
+              {soldPlayers.length > 0 && (
+                <AuctionStats
+                  highestSold={auctionStatsData.highestSold}
+                  totalSpent={auctionStatsData.totalSpent}
+                  avgPrice={auctionStatsData.avgPrice}
+                  topSpendingTeam={auctionStatsData.topSpendingTeam}
+                  teamDisplayName={teamDisplayName}
+                />
               )}
 
               {/* Sold Players Summary */}
@@ -633,6 +821,11 @@ const AuctionRoom = ({ room, participant: initialParticipant }: AuctionRoomProps
                               </span>
                             )}
                             <span className="font-medium">{p.name}</span>
+                            {p.sold_to_team && (
+                              <span className="text-[10px] text-muted-foreground">
+                                → {teamDisplayName(p.sold_to_team)}
+                              </span>
+                            )}
                           </div>
                           <span className="text-xs font-semibold">
                             {p.sold_price ? formatPrice(p.sold_price) : ""}

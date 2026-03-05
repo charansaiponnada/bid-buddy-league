@@ -9,9 +9,10 @@ interface PlayerCardProps {
   player: Player;
   currentBid: number;
   currentBidderTeam: string | null;
+  teamDisplayName?: (teamCode: string) => string;
 }
 
-const PlayerCard = ({ player, currentBid, currentBidderTeam }: PlayerCardProps) => {
+const PlayerCard = ({ player, currentBid, currentBidderTeam, teamDisplayName }: PlayerCardProps) => {
   const bidderTeam = currentBidderTeam ? getTeam(currentBidderTeam) : null;
 
   const roleColors: Record<string, string> = {
@@ -97,7 +98,9 @@ const PlayerCard = ({ player, currentBid, currentBidderTeam }: PlayerCardProps) 
                 >
                   {bidderTeam.code}
                 </span>
-                <span className="font-display text-xl">{bidderTeam.shortName}</span>
+                <span className="font-display text-xl">
+                  {teamDisplayName && currentBidderTeam ? teamDisplayName(currentBidderTeam) : bidderTeam.shortName}
+                </span>
               </div>
             </div>
           )}

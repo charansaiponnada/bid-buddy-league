@@ -7,9 +7,10 @@ type Participant = Tables<"participants">;
 interface TeamPurseBarProps {
   participants: Participant[];
   maxPurse: number;
+  teamDisplayName?: (teamCode: string) => string;
 }
 
-const TeamPurseBar = ({ participants, maxPurse }: TeamPurseBarProps) => {
+const TeamPurseBar = ({ participants, maxPurse, teamDisplayName }: TeamPurseBarProps) => {
   const teamsWithPurse = participants.filter((p) => p.team);
 
   if (teamsWithPurse.length === 0) return null;
@@ -43,7 +44,7 @@ const TeamPurseBar = ({ participants, maxPurse }: TeamPurseBarProps) => {
                   </span>
                 )}
                 <span className="text-xs font-semibold truncate">
-                  {team?.shortName || p.display_name}
+                  {teamDisplayName && p.team ? teamDisplayName(p.team) : (team?.shortName || p.display_name)}
                 </span>
               </div>
               <div className="text-sm font-bold">{formatPrice(purseLeft)}</div>

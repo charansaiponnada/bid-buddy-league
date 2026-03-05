@@ -28,6 +28,7 @@ const AuctionHeader = ({
 }: AuctionHeaderProps) => {
   const statusColors: Record<string, string> = {
     bidding: "bg-green-500",
+    paused: "bg-yellow-500",
     sold: "bg-secondary",
     unsold: "bg-destructive",
     idle: "bg-muted-foreground",
