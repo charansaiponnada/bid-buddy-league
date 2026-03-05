@@ -57,6 +57,12 @@ export default {
           border: "hsl(var(--sidebar-border))",
           ring: "hsl(var(--sidebar-ring))",
         },
+        ipl: {
+          blue: "hsl(var(--ipl-blue))",
+          orange: "hsl(var(--ipl-orange))",
+          gold: "hsl(var(--ipl-gold))",
+          dark: "hsl(var(--ipl-dark))",
+        },
       },
       borderRadius: {
         lg: "var(--radius)",
