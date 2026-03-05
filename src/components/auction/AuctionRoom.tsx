@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { getUserId, formatPrice } from "@/lib/auction";
 import { getBidIncrement, getTeamSquadInfo, validateBid, getAcceleratedBasePrice, MAX_SQUAD_SIZE, MAX_OVERSEAS, type TeamSquadInfo } from "@/lib/auctionRules";
@@ -45,6 +45,7 @@ const AuctionRoom = ({ room, participant: initialParticipant }: AuctionRoomProps
   const [pausedTimeLeft, setPausedTimeLeft] = useState<number | null>(null);
   const [timerDuration, setTimerDuration] = useState(30);
   const [soldAnimation, setSoldAnimation] = useState<{ playerName: string; teamCode: string; price: number } | null>(null);
+  const prevAuctionStatusRef = useRef<string | null>(null);
 
   const loadAll = useCallback(async () => {
     // Load auction state
@@ -173,6 +174,37 @@ const AuctionRoom = ({ room, participant: initialParticipant }: AuctionRoomProps
     };
   }, [room.id, loadAll]);
 
+  // ── Sold animation sync for ALL clients (including spectators) ──
+  useEffect(() => {
+    const prev = prevAuctionStatusRef.current;
+    const curr = auctionState?.status || null;
+    prevAuctionStatusRef.current = curr;
+
+    // Trigger animation when status transitions TO "sold" (not on initial load)
+    if (curr === "sold" && prev !== "sold" && prev !== null) {
+      const soldPlayer = players.find((p) => p.id === auctionState?.current_player_id);
+      const soldTeam = auctionState?.current_bidder_team;
+      const soldPrice = auctionState?.current_bid || 0;
+
+      if (soldPlayer && soldTeam && soldPrice > 0) {
+        setSoldAnimation({
+          playerName: soldPlayer.name,
+          teamCode: soldTeam,
+          price: soldPrice,
+        });
+
+        // Clear animation and auto-advance after delay
+        setTimeout(async () => {
+          setSoldAnimation(null);
+          // Only host advances to the next player
+          if (isHost) {
+            await startNextPlayer();
+          }
+        }, 3500);
+      }
+    }
+  }, [auctionState?.status, auctionState?.current_player_id, auctionState?.current_bidder_team, auctionState?.current_bid, players]);
+
   // ── Computed: team squad info for the current user ──
 
   const soldPlayers = useMemo(() => players.filter((p) => p.status === "sold"), [players]);
@@ -196,29 +228,41 @@ const AuctionRoom = ({ room, participant: initialParticipant }: AuctionRoomProps
 
   // ── Host Actions ──
 
+  const startAcceleratedAuction = async () => {
+    const unsold = players.filter((p) => p.status === "unsold");
+    if (unsold.length === 0) return;
+    setAcceleratedRound(true);
+    // Re-mark unsold players as upcoming with reduced base price
+    for (const p of unsold) {
+      const newBase = getAcceleratedBasePrice(p.base_price);
+      await supabase
+        .from("players")
+        .update({ status: "upcoming", base_price: newBase })
+        .eq("id", p.id);
+    }
+    await supabase.from("chat_messages").insert({
+      room_id: room.id,
+      sender: "System",
+      type: "system",
+      message: `🔄 ACCELERATED AUCTION! ${unsold.length} unsold players return at ₹20L base price.`,
+    });
+    toast.info("Accelerated auction started!");
+    // Now start picking players from the refreshed upcoming list
+    await startNextPlayer();
+  };
+
   const startNextPlayer = async () => {
     let upcoming = players.filter((p) => p.status === "upcoming");
 
-    // If no upcoming but there are unsold players → accelerated round
+    // If no upcoming but there are unsold players, pause and let host decide
     if (upcoming.length === 0 && !acceleratedRound) {
-      const unsoldPlayers = players.filter((p) => p.status === "unsold");
-      if (unsoldPlayers.length > 0) {
-        setAcceleratedRound(true);
-        // Re-mark unsold players as upcoming with reduced base price
-        for (const p of unsoldPlayers) {
-          const newBase = getAcceleratedBasePrice(p.base_price);
-          await supabase
-            .from("players")
-            .update({ status: "upcoming", base_price: newBase })
-            .eq("id", p.id);
-        }
-        await supabase.from("chat_messages").insert({
-          room_id: room.id,
-          sender: "System",
-          type: "system",
-          message: `🔄 ACCELERATED AUCTION! ${unsoldPlayers.length} unsold players return at ₹20L base price.`,
-        });
-        toast.info("Accelerated auction started!");
+      const unsold = players.filter((p) => p.status === "unsold");
+      if (unsold.length > 0) {
+        // Set auction to idle so the host sees the choice screen
+        await supabase
+          .from("auction_state")
+          .update({ status: "idle", current_player_id: null, current_bid: 0, current_bidder_id: null, current_bidder_team: null, timer_ends_at: null })
+          .eq("room_id", room.id);
         return;
       }
     }
@@ -323,14 +367,11 @@ const AuctionRoom = ({ room, participant: initialParticipant }: AuctionRoomProps
         .eq("id", buyer.id);
     }
 
-    // Reset auction state
+    // Update auction state — keep sold info (bid, team) so ALL clients can show the animation
     await supabase
       .from("auction_state")
       .update({
         status: "sold",
-        current_bid: 0,
-        current_bidder_id: null,
-        current_bidder_team: null,
         timer_ends_at: null,
       })
       .eq("room_id", room.id);
@@ -345,19 +386,7 @@ const AuctionRoom = ({ room, participant: initialParticipant }: AuctionRoomProps
     });
 
     toast.success(`${currentPlayer.name} sold to ${teamInfo?.shortName || soldTeam}!`);
-
-    // Trigger sold animation
-    setSoldAnimation({
-      playerName: currentPlayer.name,
-      teamCode: soldTeam,
-      price: soldPrice,
-    });
-
-    // Auto-advance to next player after sold animation
-    setTimeout(async () => {
-      setSoldAnimation(null);
-      await startNextPlayer();
-    }, 3500);
+    // Sold animation + auto-advance is handled reactively by the useEffect for ALL clients
   };
 
   const markUnsold = async () => {
@@ -710,16 +739,50 @@ const AuctionRoom = ({ room, participant: initialParticipant }: AuctionRoomProps
                     </div>
                   ) : (
                     <div className="space-y-4">
-                      <h3 className="font-display text-3xl tracking-wide text-muted-foreground">
-                        Waiting for host to start...
-                      </h3>
-                      {isHost && upcomingPlayers.length > 0 && (
-                        <button
-                          onClick={startNextPlayer}
-                          className="inline-flex items-center justify-center rounded-xl px-8 py-4 text-lg font-bold bg-secondary hover:bg-secondary/90 text-secondary-foreground transition-colors"
-                        >
-                          🏏 Start First Player
-                        </button>
+                      {upcomingPlayers.length === 0 && unsoldPlayers.length > 0 && !acceleratedRound ? (
+                        // All upcoming exhausted, unsold remain → host decides
+                        <>
+                          <h3 className="font-display text-2xl tracking-wide text-muted-foreground">
+                            All players have been presented
+                          </h3>
+                          <p className="text-muted-foreground">
+                            {unsoldPlayers.length} player{unsoldPlayers.length > 1 ? "s" : ""} went unsold
+                          </p>
+                          {isHost ? (
+                            <div className="flex flex-col sm:flex-row gap-3 justify-center pt-2">
+                              <button
+                                onClick={startAcceleratedAuction}
+                                className="inline-flex items-center justify-center rounded-xl px-8 py-4 text-lg font-bold bg-secondary hover:bg-secondary/90 text-secondary-foreground transition-colors"
+                              >
+                                🔄 Accelerated Auction ({unsoldPlayers.length} players)
+                              </button>
+                              <button
+                                onClick={endAuction}
+                                className="inline-flex items-center justify-center rounded-xl px-8 py-4 text-lg font-bold bg-destructive hover:bg-destructive/90 text-destructive-foreground transition-colors"
+                              >
+                                🏆 End Auction
+                              </button>
+                            </div>
+                          ) : (
+                            <p className="text-muted-foreground animate-pulse">
+                              Waiting for host to decide...
+                            </p>
+                          )}
+                        </>
+                      ) : (
+                        <>
+                          <h3 className="font-display text-3xl tracking-wide text-muted-foreground">
+                            Waiting for host to start...
+                          </h3>
+                          {isHost && upcomingPlayers.length > 0 && (
+                            <button
+                              onClick={startNextPlayer}
+                              className="inline-flex items-center justify-center rounded-xl px-8 py-4 text-lg font-bold bg-secondary hover:bg-secondary/90 text-secondary-foreground transition-colors"
+                            >
+                              🏏 Start First Player
+                            </button>
+                          )}
+                        </>
                       )}
                     </div>
                   )}
