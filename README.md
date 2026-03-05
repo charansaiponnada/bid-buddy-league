@@ -143,23 +143,23 @@ This regenerates `public/data/ipl_players.csv` with 147+ players including stats
 <table>
   <tr>
     <td align="center">
-      <a href="https://github.com/charansaiponnada">
-        <img src="https://github.com/charansaiponnada.png" width="80px;" alt="Charan Sai Ponnada" style="border-radius:50%"/>
+        <a href="https://github.com/charansaiponnada">
+          <img src="https://github.com/charansaiponnada.png" width="80px;" alt="Charan Sai Ponnada" style="border-radius:50%"/>
+          <br />
+          <sub><b>Charan Sai Ponnada</b></sub>
+        </a>
         <br />
-        <sub><b>Charan Sai Ponnada</b></sub>
-      </a>
-      <br />
-      <sub>Lead Developer</sub>
-    </td>
-    <td align="center">
-      <a href="https://lovable.dev">
-        <img src="https://ui-avatars.com/api/?name=Lovable&background=7c3aed&color=fff&size=80&bold=true" width="80px;" alt="Lovable" style="border-radius:50%"/>
+        <sub>Lead Developer</sub>
+        </td>
+        <td align="center">
+        <a href="https://github.com/TatineniUvrdhveswara/">
+          <img src="https://github.com/TatineniUvrdhveswara.png" width="80px;" alt="Tatineni Uvrdhveswara" style="border-radius:50%"/>
+          <br />
+          <sub><b>Tatineni Uvrdhveswara</b></sub>
+        </a>
         <br />
-        <sub><b>Lovable</b></sub>
-      </a>
-      <br />
-      <sub>AI Scaffold</sub>
-    </td>
+        <sub>Contributor</sub>
+        </td>
   </tr>
 </table>
 
