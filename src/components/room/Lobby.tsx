@@ -85,6 +85,19 @@ const Lobby = ({ room, participant: initialParticipant }: LobbyProps) => {
     toast.success("Room link copied!");
   };
 
+  const kickParticipant = async (participantId: string, displayName: string) => {
+    const { error } = await supabase
+      .from("participants")
+      .delete()
+      .eq("id", participantId);
+
+    if (error) {
+      toast.error("Failed to kick player");
+    } else {
+      toast.success(`${displayName} has been removed from the room`);
+    }
+  };
+
   const startAuction = async () => {
     const withTeams = participants.filter((p) => p.team);
     if (withTeams.length < 2) {
@@ -178,6 +191,8 @@ const Lobby = ({ room, participant: initialParticipant }: LobbyProps) => {
           participants={participants}
           hostId={room.host_id}
           currentUserId={userId}
+          isHost={isHost}
+          onKick={kickParticipant}
         />
 
         {/* Host Controls */}

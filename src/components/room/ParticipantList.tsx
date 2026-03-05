@@ -1,5 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { getTeam } from "@/lib/teams";
 import { formatPrice } from "@/lib/auction";
 import type { Tables } from "@/integrations/supabase/types";
@@ -10,9 +11,11 @@ interface ParticipantListProps {
   participants: Participant[];
   hostId: string;
   currentUserId: string;
+  isHost: boolean;
+  onKick?: (participantId: string, displayName: string) => void;
 }
 
-const ParticipantList = ({ participants, hostId, currentUserId }: ParticipantListProps) => {
+const ParticipantList = ({ participants, hostId, currentUserId, isHost, onKick }: ParticipantListProps) => {
   return (
     <Card>
       <CardHeader className="pb-3">
@@ -26,6 +29,7 @@ const ParticipantList = ({ participants, hostId, currentUserId }: ParticipantLis
             const team = p.team ? getTeam(p.team) : null;
             const isMe = p.user_id === currentUserId;
             const isHostUser = p.user_id === hostId;
+            const canKick = isHost && !isHostUser && !isMe;
 
             return (
               <div
@@ -60,6 +64,16 @@ const ParticipantList = ({ participants, hostId, currentUserId }: ParticipantLis
                   <Badge variant="secondary" className="text-xs capitalize">
                     {p.role}
                   </Badge>
+                  {canKick && onKick && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 px-2 text-destructive hover:text-destructive hover:bg-destructive/10"
+                      onClick={() => onKick(p.id, p.display_name)}
+                    >
+                      Kick
+                    </Button>
+                  )}
                 </div>
               </div>
             );
