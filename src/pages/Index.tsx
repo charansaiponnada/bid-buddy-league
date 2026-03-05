@@ -128,6 +128,22 @@ const Index = () => {
       <div className="w-full max-w-md">
         {/* Header */}
         <div className="text-center mb-8">
+          <div className="flex items-center justify-center gap-3 mb-2">
+            <svg width="56" height="56" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" className="drop-shadow-lg">
+              {/* Cricket bat */}
+              <rect x="18" y="8" width="8" height="32" rx="3" transform="rotate(-15 18 8)" fill="#D4AF37" stroke="#8B6914" strokeWidth="1.5"/>
+              <rect x="20" y="36" width="5" height="12" rx="1" transform="rotate(-15 20 36)" fill="#8B6914"/>
+              {/* Ball */}
+              <circle cx="44" cy="20" r="8" fill="#CC2200" stroke="#AA0000" strokeWidth="1.5"/>
+              <path d="M38 16 C40 20, 48 20, 50 16" stroke="white" strokeWidth="1" fill="none"/>
+              <path d="M38 24 C40 20, 48 20, 50 24" stroke="white" strokeWidth="1" fill="none"/>
+              {/* Stumps */}
+              <rect x="46" y="32" width="2" height="20" rx="1" fill="#D4AF37"/>
+              <rect x="50" y="32" width="2" height="20" rx="1" fill="#D4AF37"/>
+              <rect x="54" y="32" width="2" height="20" rx="1" fill="#D4AF37"/>
+              <rect x="45" y="31" width="12" height="2" rx="1" fill="#8B6914"/>
+            </svg>
+          </div>
           <h1 className="font-display text-6xl tracking-wide text-primary-foreground drop-shadow-lg">
             IPL AUCTION
           </h1>

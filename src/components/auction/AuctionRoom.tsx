@@ -14,6 +14,8 @@ import AuctionHeader from "./AuctionHeader";
 import TeamPurseBar from "./TeamPurseBar";
 import SoldOverlay from "./SoldOverlay";
 import AuctionStats from "./AuctionStats";
+import SquadViewer from "./SquadViewer";
+import Leaderboard from "./Leaderboard";
 import type { Tables } from "@/integrations/supabase/types";
 
 type Room = Tables<"rooms">;
@@ -350,7 +352,12 @@ const AuctionRoom = ({ room, participant: initialParticipant }: AuctionRoomProps
       teamCode: soldTeam,
       price: soldPrice,
     });
-    setTimeout(() => setSoldAnimation(null), 3500);
+
+    // Auto-advance to next player after sold animation
+    setTimeout(async () => {
+      setSoldAnimation(null);
+      await startNextPlayer();
+    }, 3500);
   };
 
   const markUnsold = async () => {
@@ -380,6 +387,11 @@ const AuctionRoom = ({ room, participant: initialParticipant }: AuctionRoomProps
     });
 
     toast.info(`${currentPlayer.name} unsold`);
+
+    // Auto-advance to next player after brief pause
+    setTimeout(async () => {
+      await startNextPlayer();
+    }, 2000);
   };
 
   // ── Bidder Actions ──
@@ -649,14 +661,12 @@ const AuctionRoom = ({ room, participant: initialParticipant }: AuctionRoomProps
         )}
 
         {isAuctionComplete ? (
-          <div className="text-center py-16">
-            <h2 className="font-display text-5xl tracking-wide text-primary mb-4">
-              🏆 Auction Complete!
-            </h2>
-            <p className="text-muted-foreground text-lg mb-6">
-              {soldPlayers.length} players sold, {unsoldPlayers.length} unsold
-            </p>
-          </div>
+          <Leaderboard
+            soldPlayers={soldPlayers}
+            unsoldPlayers={unsoldPlayers}
+            participants={participants}
+            teamDisplayName={teamDisplayName}
+          />
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mt-4">
             {/* Main Auction Area */}
@@ -694,30 +704,9 @@ const AuctionRoom = ({ room, participant: initialParticipant }: AuctionRoomProps
                       <h3 className="font-display text-3xl tracking-wide">
                         {auctionState.status === "sold" ? "💰 Player Sold!" : "❌ Player Unsold"}
                       </h3>
-                      {isHost && upcomingPlayers.length > 0 && (
-                        <button
-                          onClick={startNextPlayer}
-                          className="inline-flex items-center justify-center rounded-xl px-8 py-4 text-lg font-bold bg-secondary hover:bg-secondary/90 text-secondary-foreground transition-colors"
-                        >
-                          🏏 Next Player ({upcomingPlayers.length} remaining)
-                        </button>
-                      )}
-                      {isHost && upcomingPlayers.length === 0 && unsoldPlayers.length > 0 && !acceleratedRound && (
-                        <button
-                          onClick={startNextPlayer}
-                          className="inline-flex items-center justify-center rounded-xl px-8 py-4 text-lg font-bold bg-orange-600 hover:bg-orange-700 text-white transition-colors"
-                        >
-                          🔄 Accelerated Auction ({unsoldPlayers.length} unsold)
-                        </button>
-                      )}
-                      {isHost && upcomingPlayers.length === 0 && (unsoldPlayers.length === 0 || acceleratedRound) && (
-                        <button
-                          onClick={startNextPlayer}
-                          className="inline-flex items-center justify-center rounded-xl px-8 py-4 text-lg font-bold bg-accent hover:bg-accent/90 text-accent-foreground transition-colors"
-                        >
-                          🏆 End Auction
-                        </button>
-                      )}
+                      <p className="text-muted-foreground animate-pulse">
+                        Next player coming up...
+                      </p>
                     </div>
                   ) : (
                     <div className="space-y-4">
@@ -865,6 +854,14 @@ const AuctionRoom = ({ room, participant: initialParticipant }: AuctionRoomProps
                   </div>
                 </div>
               )}
+
+              {/* Squad Viewer - click to expand each team's squad */}
+              <SquadViewer
+                soldPlayers={soldPlayers}
+                participants={participants}
+                teamDisplayName={teamDisplayName}
+                myTeam={myParticipant.team}
+              />
             </div>
           </div>
         )}
