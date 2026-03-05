@@ -85,6 +85,39 @@ const Lobby = ({ room, participant: initialParticipant }: LobbyProps) => {
     toast.success("Room link copied!");
   };
 
+  const startAuction = async () => {
+    const withTeams = participants.filter((p) => p.team);
+    if (withTeams.length < 2) {
+      toast.error("Need at least 2 teams to start");
+      return;
+    }
+
+    // Load players to check
+    const { data: playerData } = await supabase
+      .from("players")
+      .select("id")
+      .eq("room_id", room.id);
+
+    if (!playerData || playerData.length === 0) {
+      toast.error("Add players to the pool first!");
+      return;
+    }
+
+    // Update room status to 'auction'
+    await supabase
+      .from("rooms")
+      .update({ status: "auction" })
+      .eq("id", room.id);
+
+    // Update auction state to idle (ready to start picking players)
+    await supabase
+      .from("auction_state")
+      .update({ status: "idle" })
+      .eq("room_id", room.id);
+
+    toast.success("Auction started! 🏏");
+  };
+
   const takenTeams = participants
     .filter((p) => p.team && p.user_id !== userId)
     .map((p) => p.team!);
@@ -166,6 +199,7 @@ const Lobby = ({ room, participant: initialParticipant }: LobbyProps) => {
               <Button
                 className="w-full h-12 text-lg font-bold bg-accent hover:bg-accent/90 text-accent-foreground"
                 disabled={participants.filter((p) => p.team).length < 2}
+                onClick={startAuction}
               >
                 🏏 Start Auction
               </Button>

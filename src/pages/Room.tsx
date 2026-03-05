@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { getUserId, getDisplayName, setDisplayName } from "@/lib/auction";
 import { toast } from "sonner";
 import Lobby from "@/components/room/Lobby";
+import AuctionRoom from "@/components/auction/AuctionRoom";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -29,6 +30,25 @@ const RoomPage = () => {
   useEffect(() => {
     loadRoom();
   }, [code]);
+
+  // Subscribe to room changes (e.g., status changing to "auction")
+  useEffect(() => {
+    if (!room) return;
+
+    const channel = supabase
+      .channel(`room-status:${room.id}`)
+      .on("postgres_changes", {
+        event: "UPDATE",
+        schema: "public",
+        table: "rooms",
+        filter: `id=eq.${room.id}`,
+      }, (payload) => {
+        setRoom(payload.new as Room);
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [room?.id]);
 
   const loadRoom = async () => {
     if (!code) return;
@@ -153,6 +173,11 @@ const RoomPage = () => {
   }
 
   if (!room || !participant) return null;
+
+  // Show auction room when auction is in progress or completed
+  if (room.status === "auction" || room.status === "completed") {
+    return <AuctionRoom room={room} participant={participant} />;
+  }
 
   return <Lobby room={room} participant={participant} />;
 };

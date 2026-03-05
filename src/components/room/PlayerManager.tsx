@@ -61,6 +61,68 @@ const PlayerManager = ({ roomId }: PlayerManagerProps) => {
     }
   };
 
+  const loadFullDatabase = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch("/data/ipl_players.csv");
+      if (!res.ok) {
+        toast.error("IPL database CSV not found. Run the scraper first: python scripts/scrape_ipl_stats.py");
+        return;
+      }
+      const text = await res.text();
+      const lines = text.split("\n").filter((l) => l.trim());
+      if (lines.length < 2) {
+        toast.error("CSV is empty");
+        return;
+      }
+
+      const headers = lines[0].split(",").map((h) => h.trim().toLowerCase());
+      const csvRows = lines.slice(1).map((line) => {
+        const cols = line.split(",").map((c) => c.trim());
+        const obj: any = {};
+        headers.forEach((h, i) => { obj[h] = cols[i]; });
+
+        const stats: Record<string, number> = {};
+        const sm = parseInt(obj.stats_matches) || 0;
+        const sr2 = parseInt(obj.stats_runs) || 0;
+        const sa = parseFloat(obj.stats_avg) || 0;
+        const ss = parseFloat(obj.stats_sr) || 0;
+        const sw = parseInt(obj.stats_wickets) || 0;
+        const se = parseFloat(obj.stats_economy) || 0;
+        if (sm) stats.matches = sm;
+        if (sr2) stats.runs = sr2;
+        if (sa) stats.avg = sa;
+        if (ss) stats.sr = ss;
+        if (sw) stats.wickets = sw;
+        if (se) stats.economy = se;
+
+        return {
+          room_id: roomId,
+          name: obj.name || "Unknown",
+          player_role: obj.player_role || obj.role || "Batsman",
+          nationality: obj.nationality || "India",
+          base_price: parseInt(obj.base_price) || 2000000,
+          auction_set: parseInt(obj.auction_set) || 1,
+          stats: Object.keys(stats).length > 0 ? stats : null,
+        };
+      });
+
+      // Insert in batches of 50
+      for (let i = 0; i < csvRows.length; i += 50) {
+        const batch = csvRows.slice(i, i + 50);
+        const { error } = await supabase.from("players").insert(batch);
+        if (error) throw error;
+      }
+
+      toast.success(`${csvRows.length} IPL players loaded!`);
+      loadPlayers();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to load IPL database");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const addPlayer = async () => {
     if (!name.trim()) { toast.error("Enter player name"); return; }
     try {
@@ -105,6 +167,23 @@ const PlayerManager = ({ roomId }: PlayerManagerProps) => {
       const cols = line.split(",").map((c) => c.trim());
       const obj: any = {};
       headers.forEach((h, i) => { obj[h] = cols[i]; });
+
+      // Build stats JSON from stats_* columns if present
+      const stats: Record<string, number> = {};
+      const statsMatches = parseInt(obj.stats_matches) || 0;
+      const statsRuns = parseInt(obj.stats_runs) || 0;
+      const statsAvg = parseFloat(obj.stats_avg) || 0;
+      const statsSr = parseFloat(obj.stats_sr) || 0;
+      const statsWickets = parseInt(obj.stats_wickets) || 0;
+      const statsEconomy = parseFloat(obj.stats_economy) || 0;
+
+      if (statsMatches) stats.matches = statsMatches;
+      if (statsRuns) stats.runs = statsRuns;
+      if (statsAvg) stats.avg = statsAvg;
+      if (statsSr) stats.sr = statsSr;
+      if (statsWickets) stats.wickets = statsWickets;
+      if (statsEconomy) stats.economy = statsEconomy;
+
       return {
         room_id: roomId,
         name: obj.name || "Unknown",
@@ -112,6 +191,7 @@ const PlayerManager = ({ roomId }: PlayerManagerProps) => {
         nationality: obj.nationality || "India",
         base_price: parseInt(obj.base_price || obj.baseprice) || 2000000,
         auction_set: parseInt(obj.auction_set || obj.set) || 1,
+        stats: Object.keys(stats).length > 0 ? stats : null,
       };
     });
 
@@ -144,9 +224,14 @@ const PlayerManager = ({ roomId }: PlayerManagerProps) => {
         {/* Quick Actions */}
         <div className="flex flex-wrap gap-2">
           {players.length === 0 && (
-            <Button onClick={loadDefaults} variant="secondary" disabled={loading}>
-              ⚡ Load Default Players ({DEFAULT_PLAYERS.length})
-            </Button>
+            <>
+              <Button onClick={loadDefaults} variant="secondary" disabled={loading}>
+                ⚡ Load Default Players ({DEFAULT_PLAYERS.length})
+              </Button>
+              <Button onClick={loadFullDatabase} variant="secondary" disabled={loading}>
+                🏏 Load Full IPL Database
+              </Button>
+            </>
           )}
           <label>
             <Button variant="outline" asChild>

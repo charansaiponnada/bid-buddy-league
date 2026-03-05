@@ -30,12 +30,8 @@ export function formatPrice(rupees: number): string {
   return `₹${rupees.toLocaleString('en-IN')}`;
 }
 
-export function getBidIncrement(currentBid: number): number {
-  if (currentBid < 5_000_000) return 500_000;
-  if (currentBid < 20_000_000) return 2_000_000;
-  if (currentBid < 50_000_000) return 5_000_000;
-  return 10_000_000;
-}
+// Re-export from auction rules for backward compat
+export { getBidIncrement } from "./auctionRules";
 
 export const DEFAULT_PLAYERS = [
   { name: 'Virat Kohli', player_role: 'Batsman', nationality: 'India', base_price: 20_000_000, auction_set: 1, stats: { matches: 237, runs: 7263, avg: 37.44, sr: 130.1 } },

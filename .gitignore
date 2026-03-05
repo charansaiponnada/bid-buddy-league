@@ -12,6 +12,16 @@ dist
 dist-ssr
 *.local
 
+# Environment variables (secrets)
+.env
+.env.*
+!.env.example
+
+# Python virtual environment
+.venv/
+__pycache__/
+*.pyc
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
@@ -22,3 +32,9 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# OS files
+Thumbs.db
+
+# Supabase local
+supabase/.temp/
