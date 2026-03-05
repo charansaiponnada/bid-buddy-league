@@ -87,6 +87,25 @@ KNOWN_OVERSEAS = {
 }
 
 
+# ─── Player image URL helper ───
+# Uses the IPL official headshot CDN and ui-avatars fallback.
+# You can add known player image URLs here for real headshots.
+# Sources: iplt20.com, ESPNcricinfo, Cricbuzz
+
+KNOWN_IMAGES = {
+    # Add real headshot URLs here, e.g.:
+    # "Virat Kohli": "https://documents.iplt20.com/ipl/IPLHeadshot2024/2.png",
+}
+
+def get_image_url(name):
+    """Return a player image URL. Uses known images dict, falls back to ui-avatars."""
+    if name in KNOWN_IMAGES:
+        return KNOWN_IMAGES[name]
+    # Generate a clean initials-based avatar via ui-avatars.com
+    encoded = name.replace(" ", "+")
+    return f"https://ui-avatars.com/api/?name={encoded}&background=1a237e&color=ffffff&size=160&bold=true&format=svg"
+
+
 def classify_role(name, runs, wickets):
     if name in KNOWN_WK:
         return "WK"
@@ -320,6 +339,7 @@ def process_players(data):
             "stats_sr": sr,
             "stats_wickets": wickets,
             "stats_economy": economy,
+            "image_url": get_image_url(name),
         })
 
     rows.sort(key=lambda x: (-x["base_price"], -x["stats_runs"]))
@@ -469,7 +489,7 @@ def main():
     fieldnames = [
         "name", "player_role", "nationality", "base_price", "auction_set",
         "stats_matches", "stats_runs", "stats_avg", "stats_sr",
-        "stats_wickets", "stats_economy",
+        "stats_wickets", "stats_economy", "image_url",
     ]
 
     with open(OUTPUT_CSV, "w", newline="", encoding="utf-8") as f:

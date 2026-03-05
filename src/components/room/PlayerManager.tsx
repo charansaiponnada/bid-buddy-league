@@ -27,6 +27,7 @@ const PlayerManager = ({ roomId }: PlayerManagerProps) => {
   const [nationality, setNationality] = useState("India");
   const [basePrice, setBasePrice] = useState("2000000");
   const [auctionSet, setAuctionSet] = useState("1");
+  const [imageUrl, setImageUrl] = useState("");
 
   useEffect(() => {
     loadPlayers();
@@ -104,6 +105,7 @@ const PlayerManager = ({ roomId }: PlayerManagerProps) => {
           base_price: parseInt(obj.base_price) || 2000000,
           auction_set: parseInt(obj.auction_set) || 1,
           stats: Object.keys(stats).length > 0 ? stats : null,
+          image_url: obj.image_url || null,
         };
       });
 
@@ -133,9 +135,11 @@ const PlayerManager = ({ roomId }: PlayerManagerProps) => {
         nationality: nationality.trim() || "India",
         base_price: parseInt(basePrice) || 2000000,
         auction_set: parseInt(auctionSet) || 1,
+        image_url: imageUrl.trim() || null,
       });
       if (error) throw error;
       setName("");
+      setImageUrl("");
       toast.success("Player added");
       loadPlayers();
     } catch (err: any) {
@@ -192,6 +196,7 @@ const PlayerManager = ({ roomId }: PlayerManagerProps) => {
         base_price: parseInt(obj.base_price || obj.baseprice) || 2000000,
         auction_set: parseInt(obj.auction_set || obj.set) || 1,
         stats: Object.keys(stats).length > 0 ? stats : null,
+        image_url: obj.image_url || null,
       };
     });
 
@@ -304,6 +309,15 @@ const PlayerManager = ({ roomId }: PlayerManagerProps) => {
           <Button onClick={addPlayer} className="h-9">
             + Add
           </Button>
+        </div>
+        <div>
+          <Label className="text-xs">Image URL (optional)</Label>
+          <Input
+            placeholder="https://example.com/player.jpg"
+            value={imageUrl}
+            onChange={(e) => setImageUrl(e.target.value)}
+            className="h-9"
+          />
         </div>
 
         {/* Player List */}

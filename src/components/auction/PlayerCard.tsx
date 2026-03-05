@@ -12,6 +12,14 @@ interface PlayerCardProps {
   teamDisplayName?: (teamCode: string) => string;
 }
 
+const getInitials = (name: string) => {
+  const parts = name.trim().split(/\s+/);
+  if (parts.length >= 2) {
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  }
+  return name.slice(0, 2).toUpperCase();
+};
+
 const PlayerCard = ({ player, currentBid, currentBidderTeam, teamDisplayName }: PlayerCardProps) => {
   const bidderTeam = currentBidderTeam ? getTeam(currentBidderTeam) : null;
 
@@ -51,13 +59,21 @@ const PlayerCard = ({ player, currentBid, currentBidderTeam, teamDisplayName }: 
               </span>
             </div>
           </div>
-          {player.image_url && (
-            <img
-              src={player.image_url}
-              alt={player.name}
-              className="w-20 h-20 rounded-full object-cover border-2 border-white/20"
-            />
-          )}
+          <div className="flex-shrink-0 ml-4">
+            {player.image_url ? (
+              <img
+                src={player.image_url}
+                alt={player.name}
+                className="w-24 h-24 rounded-full object-cover object-top border-2 border-white/30 shadow-lg"
+                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden'); }}
+              />
+            ) : null}
+            <div className={`w-24 h-24 rounded-full border-2 border-white/30 shadow-lg bg-white/10 backdrop-blur-sm flex items-center justify-center ${player.image_url ? 'hidden' : ''}`}>
+              <span className="font-display text-2xl text-white/80 tracking-wider">
+                {getInitials(player.name)}
+              </span>
+            </div>
+          </div>
         </div>
       </div>
 
