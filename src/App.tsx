@@ -16,12 +16,26 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Index />} />
-          <Route path="/room/:code" element={<RoomPage />} />
-          <Route path="/results/:code" element={<Results />} />
-          <Route path="*" element={<NotFound />} />
-        </Routes>
+        <div className="flex min-h-screen flex-col">
+          <main className="flex-1">
+            <Routes>
+              <Route path="/" element={<Index />} />
+              <Route path="/room/:code" element={<RoomPage />} />
+              <Route path="/results/:code" element={<Results />} />
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </main>
+          <footer className="border-t border-border/60 bg-background/80 py-3 text-center text-sm text-muted-foreground">
+            made with {" "}
+            <span
+              aria-label="heart"
+              className="inline-block text-base font-semibold text-rose-500 drop-shadow-[0_0_8px_rgba(244,63,94,0.8)]"
+            >
+              ♥
+            </span>{" "}
+            by CSP
+          </footer>
+        </div>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>
